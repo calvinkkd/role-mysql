@@ -1,0 +1,113 @@
+---
+# tasks file for role-mysql
+
+#- name: Configure MySQL repo for EL7
+#  yum_repository:
+#    name: core_MySQL57
+#    description: 'MySQL 5.7 (x86_64)'
+#    baseurl: http://10.228.186.13/repo/Oracle/MySQL/MySQL57/EL7/x86_64/
+#    gpgcheck: no
+#    file: core-MySQL
+#  when: ansible_os_family == "RedHat" and ansible_distribution_major_version == "7" and ansible_architecture == "x86_64"
+#
+#- name: Configure MySQL repo for EL6
+#  yum_repository:
+#    name: core_MySQL57
+#    description: 'MySQL 5.7 (x86_64)'
+#    baseurl: http://10.228.186.13/repo/Oracle/MySQL/MySQL57/EL6/x86_64/
+#    gpgcheck: no
+#    file: core-MySQL
+#  when: ansible_os_family == "RedHat" and ansible_distribution_major_version == "6" and ansible_architecture == "x86_64"
+
+- name: Configure MySQL repository
+  yum_repository:
+    name: 'mysql-community'
+    description: 'MySQL {{ mysql_version }} Server (x86_64)'
+    baseurl: '{{ mysql_repo_url }}/mysql-{{ mysql_version }}-community/el/{{ ansible_distribution_major_version }}/x86_64'
+    gpgcheck: no
+    file: mysql-community
+
+- name: Configure MySQL Connectors repository
+  yum_repository:
+    name: 'mysql-connectors'
+    description: 'MySQL Connectors (x86_64)'
+    baseurl: '{{ mysql_repo_url }}/mysql-connectors-community/el/{{ ansible_distribution_major_version }}/x86_64'
+    gpgcheck: no
+    file: mysql-community
+
+- name: Configure MySQL Tools repository
+  yum_repository:
+    name: 'mysql-tools'
+    description: 'MySQL Tools (x86_64)'
+    baseurl: '{{ mysql_repo_url }}/mysql-tools-community/el/{{ ansible_distribution_major_version }}/x86_64'
+    gpgcheck: no
+    file: mysql-community
+
+- name: Install software
+  yum: name={{ item }} state=present
+  with_items:
+    - 'mysql-community-libs'
+    - 'mysql-community-libs-compat'
+    - 'mysql-community-common'
+    - 'mysql-community-client'
+    - 'mysql-community-server'
+    - 'MySQL-python'
+
+- name: Create filesystems
+  include: filesystems.yml
+  when: mysql_datavg is defined
+
+# Permissions
+
+- name: Assign permissions for data directory
+  file: path={{ mysql_data_path }} owner=mysql group=mysql mode=0755 state=directory
+  when: mysql_data_path is defined
+
+- name: Assign permissions for backup directory
+  file: path={{ mysql_backup_path }} owner=mysql group=mysql mode=0755 state=directory
+  when: mysql_backup_path is defined
+
+- name: Configure data path
+  lineinfile: dest=/etc/my.cnf regexp='^datadir=' line='datadir={{ mysql_data_path }}' state=present
+  when: mysql_data_path is defined
+
+- name: Configure listen port
+  lineinfile: dest=/etc/my.cnf regexp='^port=' line='port={{ mysql_port }}' state=present
+  when: mysql_port is defined
+  notify: mysql restart
+
+- name: Service start
+  service: name=mysqld state=started enabled=yes
+
+- name: Find temporary password
+  shell: "echo `grep 'temporary.*root@localhost' /var/log/mysqld.log | tail -1 | sed 's/.*root@localhost: //'`"
+  register: mysql_root_password_temp
+  when: mysql_version == '5.7'
+
+- name: Assign root password if not defined
+  set_fact: 
+     mysql_root_password: "{{ mysql_root_password_temp.stdout }}"
+  when: mysql_root_password is undefined
+
+- name: Set new password from temporary password
+  shell: 'mysql -e "SET PASSWORD = PASSWORD(''{{ mysql_root_password }}'');" --connect-expired-password -uroot -p"{{ mysql_root_password_temp.stdout }}"'
+  ignore_errors: Yes
+  no_log: True
+  when: mysql_version == '5.7'
+
+- name: Set new password
+  shell: 'mysqladmin -u root --password="" password "{{ mysql_root_password }}"'
+  ignore_errors: Yes
+  no_log: True
+  when: mysql_version == '5.6' or mysql_version == '5.5'
+
+- name: Create databases
+  mysql_db: name={{ item }} state=present login_user=root login_password={{ mysql_root_password }}
+  with_items: "{{ mysql_db_list | default() }}"
+  when: mysql_db_list is defined
+
+- name: Create users
+  mysql_user: name={{ item.name }} password={{ item.pass }} priv={{ item.priv }} host={{ item.host }} update_password=on_create state=present login_user=root login_password={{ mysql_root_password }}
+  with_items: "{{ mysql_user_list | default() }}"
+  when: mysql_user_list is defined
+

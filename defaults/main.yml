@@ -1,0 +1,39 @@
+---
+# defaults file for role-mysql
+
+mysql_root_password: 'Tempor@l123'
+
+#mysql_port: '3306'
+#mysql_data_path: '/var/lib/mysql'
+#mysql_data_size: '5G'
+#mysql_backup_path: '/mysql_backup'
+#mysql_backup_size: '10G'
+
+#mysql_datavg: 'datosvg'
+#mysql_disks: '/dev/sdb'
+
+mysql_repo_url: 'http://10.228.186.13/repo/MySQL'
+# Available versions: 5.5 | 5.6 | 5.7
+mysql_version: '5.7'
+
+
+# Examples of user and db creation
+#
+#mysql_db_list:
+#  - database1
+#  - database2
+#  - database3
+
+#mysql_user_list:
+#  - name: 'user1'
+#    pass: 'Tempor@l123'
+#    host: '%'
+#    priv: 'database1.*:ALL'
+#  - name: 'user2'
+#    pass: 'Tempor@l456'
+#    host: 'localhost'
+#    priv: '*.*:USAGE'
+#  - name: 'user3'
+#    pass: 'Tempor@l678'
+#    host: '10.10.20.30'
+#    priv: 'database2.*:ALL,GRANT'

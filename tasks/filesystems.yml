@@ -1,0 +1,32 @@
+# Create VG and filesystems
+
+ - name: Create data VG
+   lvg: vg={{ mysql_datavg }} pvs={{ mysql_disks }}
+   when: mysql_disks is defined
+
+ - block:
+   - name: Create data volume
+     lvol: vg={{ mysql_datavg }} lv=mysqllv size={{ mysql_data_size }}
+  
+   - name: Format data filesystem
+     filesystem: fstype=ext4 dev=/dev/mapper/{{ mysql_datavg }}-mysqllv resizefs=yes opts="-m 1"
+  
+   - name: Mount data filesystem
+     mount: name={{ mysql_data_path }} src=/dev/mapper/{{ mysql_datavg }}-mysqllv fstype=ext4 opts=defaults,noatime dump='1' passno='2' state=mounted
+
+   - name: Exclude lost+found subdirectory
+     lineinfile: dest=/etc/my.cnf regexp='^ignore-db-dir=' line='ignore-db-dir=lost+found' state=present
+
+   when: mysql_data_size is defined
+
+ - block:
+   - name: Create backup volume
+     lvol: vg={{ mysql_datavg }} lv=mysqlbcklv size={{ mysql_backup_size }}
+  
+   - name: Format backup filesystem
+     filesystem: fstype=ext4 dev=/dev/mapper/{{ mysql_datavg }}-mysqlbcklv resizefs=yes opts="-m 1"
+   
+   - name: Mount backup filesystem
+     mount: name={{ mysql_backup_path }} src=/dev/mapper/{{ mysql_datavg }}-mysqlbcklv fstype=ext4 opts=defaults,noatime dump='1' passno='2' state=mounted
+
+   when: mysql_backup_size is defined and mysql_backup_path is defined
